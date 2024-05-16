@@ -1,5 +1,8 @@
 local TOCNAME,GBB=...
 
+local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local isSoD = C_Seasons and (C_Seasons.GetActiveSeason() == Enum.SeasonID.SeasonOfDiscovery)
+
 local function getSeasonalDungeons()
     local events = {}
 
@@ -784,6 +787,13 @@ function GBB.GetDungeonSort()
 		end
     end
 
+	if isClassicEra then
+		-- todo: add "Ony"
+		-- table.insert(GBB.VanillDungeonNames, "ONY")
+		GBB.TbcDungeonNames = {}
+		GBB.WotlkDungeonNames = {}
+	end
+
 	local dungeonOrder = { GBB.VanillDungeonNames, GBB.TbcDungeonNames, GBB.WotlkDungeonNames, GBB.PvpNames, GBB.Misc, GBB.DebugNames}
 
 	-- Why does Lua not having a fucking size function
@@ -831,3 +841,22 @@ local function DetermineVanillDungeonRange()
 end
 
 GBB.dungeonLevel = Union(Union(Union(DetermineVanillDungeonRange(), GBB.TbcDungeonLevels), GBB.WotlkDungeonLevels), GBB.PvpLevels)
+
+if isClassicEra then
+	local miscCategoryLevels = {
+		["MISC"] = {0, 100}, 
+		["TRAVEL"] = {0, 100}, 
+		["INCUR"] = {0, 100},
+		["DEBUG"] = {0, 100}, 
+		["BAD"] = {0, 100}, 
+		["TRADE"] = {0, 100},
+		["BLOOD"] = isSoD and {0, 100} or nil
+	}
+	-- includes valid dungeons/raids/bgs
+	local dungeonLevels = GBB.GetDungeonLevelRanges()
+	-- needed because Option.lua hardcodes a checkbox for "DEADMINES"
+	dungeonLevels["DEADMINES"] = dungeonLevels["DM"]
+	-- needed because dungeons/classic.lua uses "NAXX" instead of "NAX"
+	dungeonLevels["NAX"] = dungeonLevels["NAXX"]
+	GBB.dungeonLevel = Union(dungeonLevels, miscCategoryLevels)
+end
