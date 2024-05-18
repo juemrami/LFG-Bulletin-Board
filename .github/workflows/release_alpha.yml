@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - working-trunk
-  
       
 # a workflow is built up as jobs, and within these jobs are steps
 jobs:
@@ -34,4 +33,4 @@ jobs:
       - name: Package and release
         uses: BigWigsMods/packager@v2.3.1
         with:
-          args: -g cata -n "{package-name}-{game-type}-{relese-type}-{project-abbreviated-hash}"
+          args: -g cata -n "{package-name}-{game-type}-{release-type}-{project-abbreviated-hash}"
