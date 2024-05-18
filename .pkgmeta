@@ -1,0 +1,4 @@
+package-as: LFGBulletinBoard
+
+move-folders:
+    LFGBulletinBoard/LFGBulletinBoard: LFGBulletinBoard
