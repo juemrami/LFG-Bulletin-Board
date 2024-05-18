@@ -6,6 +6,8 @@
 ## DefaultState: enabled
 ## SavedVariables: GroupBulletinBoardDB
 ## SavedVariablesPerCharacter: GroupBulletinBoardDBChar
+## X-Curse-Project-ID: 484920
+
 LibGPIOptions.lua
 LibGPIMinimapButton.lua
 LibGPIToolBox.lua
