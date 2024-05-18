@@ -27,7 +27,7 @@ jobs:
 
       # we first have to clone the AddOn project, this is a required step
       - name: Clone project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # gets git history for changelogs
 
@@ -35,4 +35,4 @@ jobs:
       - name: Package and release
         uses: BigWigsMods/packager@v2.3.1
         with:
-          args: -g cata -n "{package-name}-{game-type}-{relese-type}-{project-abbreviated-hash}"
+          args: -g cata -n "{package-name}-{game-type}-{release-type}-{project-abbreviated-hash}"
