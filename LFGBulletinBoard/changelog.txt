@@ -1,6 +1,12 @@
 --[[
 
 Group Bulletin Board 	
+3.3alpha
+ - ptBR localization support added
+ - missing localizations for dungeon names added.
+ - Updates to expansion filters in the config panel.
+ - cataclysm basic support (no search tags yet just ui) 
+ - fixes to duplicate request with realm names enabled
 
 3.24  
  - All credit goes to juemrami for all the fixes.
