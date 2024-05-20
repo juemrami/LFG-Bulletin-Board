@@ -53,6 +53,41 @@ local function requestSort_nTOP_nTOTAL (a,b)
 	return false
 end
 
+local function LFGSearch(categoryId)
+    local filterVal = 0
+    -- if categoryId == 2 then
+    --     filterVal = 1
+    -- end
+
+	local preferredFilters
+    local languages = C_LFGList.GetLanguageSearchFilter() or {};
+	-- include addon set languages
+	languages.enUS =languages.enUS or GBB.DB.TagsEnglish
+	languages.deDE =languages.deDE or GBB.DB.TagsGerman
+	languages.ruRU =languages.ruRU or GBB.DB.TagsRussian
+	languages.frFR =languages.frFR or GBB.DB.TagsFrench
+	languages.zhTW =languages.zhTW or GBB.DB.TagsZhtw
+	languages.zhCN =languages.zhCN or GBB.DB.TagsZhcn
+	languages.esES =languages.esES or GBB.DB.TagsSpanish
+	languages.esMX =languages.esMX or GBB.DB.TagsSpanish
+	languages.ptBR =languages.ptBR or GBB.DB.TagsPortuguese
+    C_LFGList.Search(categoryId, filterVal, preferredFilters, languages)
+end
+
+----------------------------------------------------
+local categoryIdx = 0
+local lfgCategories = {
+	2, -- Dungeons
+	114, -- Raids
+	116, -- Quests & Zones
+	118, -- PVP (not enabled in cata clients atm)
+	120, -- "Custom"
+}
+function GBB.BtnRefresh(button)
+	categoryIdx = math.fmod(categoryIdx, #lfgCategories) + 1
+	LFGSearch(lfgCategories[categoryIdx])
+end
+
 local function WhoRequest(name)
 	--DEFAULT_CHAT_FRAME:AddMessage(GBB.MSGPREFIX .. string.format(GBB.L["msgStartWho"],name))
 	--DEFAULT_CHAT_FRAME.editBox:SetText("/who " .. name)
@@ -134,28 +169,47 @@ end
 
 
 function GBB.GetLfgList()
-
 	local totalResultsFound, results = C_LFGList.GetSearchResults()
-
 	for _, v in pairs(results) do
 		local dungeonTXT=""
 
         local searchResultData = C_LFGList.GetSearchResultInfo(v)
-
         if searchResultData.isDelisted == false then
-            local requestTime=time() -  searchResultData.age
-
-            local msg = ""
+            local requestTime=time() -  (searchResultData.age or 0)
+			
+			-- occasionally the leaderName is nil.
+			searchResultData.leaderName = searchResultData.leaderName or UNKNOWN
+			
+			searchResultData.activityIDs = searchResultData.activityIDs or {}
+			tinsert(searchResultData.activityIDs , searchResultData.activityID)
+            
+			-- note: 
+			-- blizzard obscures the result.name and result.comment fields of the search result.
+			-- they are essentially "display only" and cannot be parsed using `string` functions.
+			-- See https://warcraft.wiki.gg/wiki/UI_escape_sequences#Protected_strings
+			-- the only info we can really parse on is the activity
+			local displayStr = searchResultData.name or "" -- listing name
             if searchResultData.comment ~= nil and string.len(searchResultData.comment) > 2 then
-                msg = searchResultData.comment
+                displayStr = searchResultData.name .." | ".. searchResultData.comment
             end
-
                 for _, activityID in pairs(searchResultData.activityIDs) do
                     local activityInfo = C_LFGList.GetActivityInfoTable(activityID)
-                    local activityGroupName, _ = C_LFGList.GetActivityGroupInfo(activityInfo.groupFinderActivityGroupID)
-                    local combinedMsg = activityInfo.fullName .. " " .. activityGroupName
-                    local dungeonList, _, _, _, isHeroic = GBB.GetDungeons(combinedMsg, searchResultData.leaderName)
-
+                    local activityGroup, _ = C_LFGList.GetActivityGroupInfo(activityInfo.groupFinderActivityGroupID)
+					-- hack: on "custom" activity, set the group name TAGSEARCH tag.
+					-- this will force all group finder listings to get picked up by the `GetDungeons` function.`
+					
+					if activityGroup == nil then
+						for pattern, key in pairs(GBB.tagList) do
+							if key == GBB.TAGSEARCH then
+								activityGroup = pattern
+								break
+							end
+						end
+					end
+                    local parsingStr = ("%s | %s | %s"):format(
+						activityInfo.fullName, activityInfo.shortName, activityGroup
+					);
+                    local dungeonList, _, _, _, isHeroic = GBB.GetDungeons(parsingStr, searchResultData.leaderName)
                     for dungeon, id in pairs(dungeonList) do
                         local index=0
                         if id== true and dungeon~=nil then
@@ -174,7 +228,7 @@ function GBB.GetLfgList()
                                 local partyInfo = GBB.GetPartyInfo(searchResultData.searchResultID, searchResultData.numMembers)
                                 index=#GBB.LfgRequestList +1
                                 GBB.LfgRequestList[index]={}
-                                GBB.LfgRequestList[index].class=classLocalized
+                                GBB.LfgRequestList[index].class=class
                                 GBB.LfgRequestList[index].partyInfo=partyInfo
                                 GBB.LfgRequestList[index].start=requestTime
                                 GBB.LfgRequestList[index].dungeon=dungeon
@@ -191,12 +245,11 @@ function GBB.GetLfgList()
                                     end
                                 end
                             end
-
                             GBB.LfgRequestList[index].name=searchResultData.leaderName
-                            GBB.LfgRequestList[index].message= msg
+                            GBB.LfgRequestList[index].message= displayStr
                             GBB.LfgRequestList[index].IsHeroic = isHeroic
                             GBB.LfgRequestList[index].IsRaid = isRaid
-                            GBB.LfgRequestList[index].last= requestTime
+                            GBB.LfgRequestList[index].last= requestTime or 0
                             GBB.LfgRequestList[index].IsLfgTool = true
                             GBB.LfgRequestList[index].IsDelisted = searchResultData.isDelisted
                             GBB.LfgRequestList[index].resultId = searchResultData.searchResultID
@@ -405,7 +458,7 @@ local function CreateItem(yy,i,doCompact,req,forceHight)
         local roles = ""
         
         for _, v in pairs(req.partyInfo) do 
-			if (v.classLocalized == "ROGUE" or v.classLocalized == "WARLOCK" or v.classLocalized == "MAGE") then 
+			if (v.class == "ROGUE" or v.class == "WARLOCK" or v.class == "MAGE") then 
 				roles = roles..GBB.Tool.RoleIcon["DAMAGER"]
 			elseif (v.class == "DAMAGER") then
                 roles = roles..GBB.Tool.RoleIcon["DAMAGER"]
