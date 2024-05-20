@@ -39,7 +39,7 @@ jobs:
       # Release as Alpha on github with the alpha tag
       # move this to a tag action at somepoint
       - name: create GIT_TAG env variable
-        run: echo "GIT_TAG=`echo $(git describe --tags)`" >> $GITHUB_ENV
+        run: echo "GIT_TAG=`echo $(git tag --points-at HEAD)`" >> $GITHUB_ENV
 
       - name: Create alpha github release
         uses: softprops/action-gh-release@v2
