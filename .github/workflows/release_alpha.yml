@@ -3,6 +3,7 @@ name: Package and release (cataclysm alpha)
 
 on:
   push:
+    # use tag action if using this workflow on main repo
     branches:
       - working-trunk
       
@@ -34,3 +35,17 @@ jobs:
         uses: BigWigsMods/packager@v2.3.1
         with:
           args: -g cata -n "{package-name}-{game-type}-{release-type}-{project-abbreviated-hash}"
+
+      # Release as Alpha on github with the alpha tag
+      # move this to a tag action at somepoint
+      - name: create GIT_TAG env variable
+        run: echo "GIT_TAG=`echo $(git describe --tags)`" >> $GITHUB_ENV
+
+      - name: Create alpha github release
+        uses: softprops/action-gh-release@v2
+        if: ${{ startsWith(env.GIT_TAG, 'alpha')}}
+        with:
+          tag_name: ${{ env.GIT_TAG }}
+          files: ./.release/*.zip
+          draft: false
+          prerelease: true
