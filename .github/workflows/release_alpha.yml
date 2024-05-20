@@ -4,7 +4,7 @@ name: Package and release (cataclysm alpha)
 on:
   push:
     branches:
-      - working-trunk
+      - 05-19-ci_setup_github_alpha_release
       
 # a workflow is built up as jobs, and within these jobs are steps
 jobs:
@@ -34,3 +34,10 @@ jobs:
         uses: BigWigsMods/packager@v2.3.1
         with:
           args: -g cata -n "{package-name}-{game-type}-{release-type}-{project-abbreviated-hash}"
+      
+      - name: Create alpha github release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./.release/*.zip
+          draft: false
+          prerelease: true
