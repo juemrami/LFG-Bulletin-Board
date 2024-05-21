@@ -215,7 +215,7 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 		hoverTex:SetPoint("BOTTOMRIGHT", pad, -pad)
 		hoverTex:SetAtlas("search-highlight")
 		hoverTex:SetDesaturated(true) -- its comes blue by default
-		hoverTex:SetVertexColor(0.5, 0.5, 0.5, 0.7)
+		hoverTex:SetVertexColor(0.7, 0.7, 0.7, 0.4)
 		hoverTex:SetBlendMode("ADD")
 		
 		GBB.Tool.EnableHyperlink(entry)
@@ -255,12 +255,8 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 		end
 
 		local ClassIcon=""
-		if GBB.DB.ShowClassIcon and req.class and GBB.Tool.IconClass[req.class] then
-			if scale < 1  or GBB.DB.ChatStyle then
-				ClassIcon=GBB.Tool.IconClass[req.class]
-			else
-				ClassIcon=GBB.Tool.IconClassBig[req.class]
-			end
+		if GBB.DB.ShowClassIcon and req.class then
+			ClassIcon = GBB.Tool.GetClassIcon(req.class, GBB.DB.ChatStyle and 12 or 18) or ""
 		end
 
 		local FriendIcon = (
@@ -1074,7 +1070,7 @@ function GBB.RequestShowTooltip(self)
 		if GBB.DB.EnableGroup and GBB.GroupTrans and GBB.GroupTrans[req.name] then
 			local entry=GBB.GroupTrans[req.name]
 
-			GameTooltip:AddLine(GBB.Tool.IconClass[entry.class]..
+			GameTooltip:AddLine((GBB.Tool.GetClassIcon(entry.class) or "")..
 				"|c"..GBB.Tool.ClassColor[entry.class].colorStr ..
 				entry.name)
 			if entry.dungeon then
