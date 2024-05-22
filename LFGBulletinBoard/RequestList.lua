@@ -196,7 +196,6 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 		entry.Message = _G[ItemFrameName.."_message"] ---@type FontString
 		entry.Time = _G[ItemFrameName.."_time"] ---@type FontString
 		
-
 		entry.Name:SetPoint("TOPLEFT", 0,-1.5)
 		entry.Name:SetFontObject(GBB.DB.FontSize)
 		entry.Time:SetPoint("TOP", entry.Name, "TOP", 0, 0)
@@ -216,7 +215,7 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 		hoverTex:SetPoint("BOTTOMRIGHT", pad, -pad)
 		hoverTex:SetAtlas("search-highlight")
 		hoverTex:SetDesaturated(true) -- its comes blue by default
-		hoverTex:SetVertexColor(1, 1, 1, 0.4)
+		hoverTex:SetVertexColor(0.5, 0.5, 0.5, 0.7)
 		hoverTex:SetBlendMode("ADD")
 		
 		GBB.Tool.EnableHyperlink(entry)
@@ -247,11 +246,12 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 	
 	--- Fill out the entry frames children with the request data
 	if req then
-		local prefix
+		local formattedName = req.name
+		if GBB.RealLevel[req.name] then
+			formattedName = formattedName.." ("..GBB.RealLevel[req.name]..")"
+		end
 		if GBB.DB.ColorByClass and req.class and GBB.Tool.ClassColor[req.class].colorStr then
-			prefix="|c"..GBB.Tool.ClassColor[req.class].colorStr
-		else
-			prefix="|r"
+			formattedName = WrapTextInColorCode(formattedName, GBB.Tool.ClassColor[req.class].colorStr)
 		end
 
 		local ClassIcon=""
@@ -274,11 +274,6 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 			and string.format(GBB.TxtEscapePicture,GBB.PastPlayerIcon) 
 			or "")
 		);
-
-		local suffix="|r"
-		if GBB.RealLevel[req.name] then
-			suffix=" ("..GBB.RealLevel[req.name]..")"..suffix
-		end
 
 		local now = time()
 		local fmtTime
@@ -316,12 +311,16 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 			end
 		end
 		if GBB.DB.ChatStyle then
-			entry.Name:SetText()
-			entry.Message:SetText(ClassIcon.."["..prefix ..req.name..suffix.."]"..FriendIcon..": "..req.message)
+			entry.Name:SetText("")
+			entry.Message:SetFormattedText("%s\91%s\93%s: %s",
+				ClassIcon, formattedName, FriendIcon, req.message
+			);
+			entry.Message:SetIndentedWordWrap(true)
 		else
-			entry.Name:SetText(ClassIcon..prefix .. req.name .. suffix..FriendIcon)
-			entry.Message:SetText(typePrefix .. suffix .. req.message)
+			entry.Name:SetFormattedText("%s%s%s", ClassIcon, formattedName, FriendIcon)
+			entry.Message:SetFormattedText("%s %s", typePrefix, req.message)
 			entry.Time:SetText(fmtTime)
+			entry.Message:SetIndentedWordWrap(false)
 		end
 
 		entry.Message:SetTextColor(GBB.DB.EntryColor.r,GBB.DB.EntryColor.g,GBB.DB.EntryColor.b,GBB.DB.EntryColor.a)
