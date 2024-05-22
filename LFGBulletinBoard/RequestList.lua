@@ -184,7 +184,7 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 	local ItemFrameName="GBB.Item_"..i
 	local entry = GBB.FramesEntries[i]
 	-- space between inner-bottom of entry and outer-bottom of message
-	local bottomPadding = 4; 
+	local bottomPadding = 2;
 	
 	if GBB.FramesEntries[i]==nil then
 		---@class requestEntry : Frame
@@ -236,6 +236,9 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 	-- request message
 	entry.Message:SetFontObject(GBB.DB.FontSize)
 	entry.Message:SetMaxLines(GBB.DB.DontTrunicate and 99 or 1)
+	entry.Message:SetJustifyV("TOP")
+	entry.Message:ClearAllPoints() -- incase swapped to 2-line mode
+	
 	if GBB.DontTrunicate then
 		-- make sure the initial size of the FontString object is big enough
 		-- to allow for all possible text when not truncating
@@ -292,7 +295,7 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 				fmtTime=GBB.formatTime(now-req.last)
 			end
 		end
-
+		
 		local typePrefix = ""
 		if not isClassicEra then -- "heroic" is not a concept in classic era/sod
 			if req.IsHeroic == true then
@@ -336,9 +339,10 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 	entry.Time:SetScale(scale)
 	if scale < 1 then -- aka GBB.DB.CompactStyle
 		entry.Message:SetPoint("TOPLEFT",entry.Name, "BOTTOMLEFT", 0, -2)
-		entry.Message:SetPoint("RIGwHT",entry.Time, "RIGHT", 0,0)
+		entry.Message:SetPoint("RIGHT",entry.Time, "RIGHT", 0,0)
 	else
-		entry.Message:SetPoint("TOPLEFT",entry.Name, "TOPRIGHT", 10)
+		entry.Message:SetPoint("LEFT",entry.Name, "RIGHT", 10)
+		entry.Message:SetPoint("TOP",entry, "TOP", 0, -1)
 		entry.Message:SetPoint("RIGHT",entry.Time, "LEFT", -10,0) 
 	end
 	if GBB.DB.ChatStyle then
@@ -367,26 +371,26 @@ local function CreateItem(scrollPos,i,scale,req,forceHight)
 	else
 		if scale < 1 then
 			projectedHeight = entry.Name:GetStringHeight() + entry.Message:GetStringHeight()
-		elseif GBB.DB.DontTrunicate then
-			projectedHeight = entry.Message:GetStringHeight()
-			entry.Message:SetJustifyV("TOP")
-		else
+		elseif GBB.DB.DontTrunicate then	
 			projectedHeight = math.max(
-				entry.Message:GetStringHeight(), entry.Name:GetStringHeight()
-			);
-			entry.Message:SetWordWrap(false)
-			entry.Message:SetJustifyV("MIDDLE")
+				entry.Message:GetStringHeight(),
+				entry.Name:GetStringHeight()
+			)
+		else
+			projectedHeight = entry.Message:GetStringHeight();
 		end
 	end
 	if not GBB.DB.DontTrunicate and forceHight then
 		projectedHeight=forceHight
-		entry.Message:SetJustifyV("MIDDLE")
 	end
 	
 	-- finally set element heights and return container height
 	entry.Message:SetHeight(projectedHeight)
-	entry.Name:SetHeight(entry.Name:GetStringHeight())
 	entry:SetPoint("TOPLEFT",_G[AnchorTop], "TOPLEFT", 10,-scrollPos)
+	-- ui nit: add a padding for multi-line message to make the highlight bigger
+	if projectedHeight > entry.Name:GetStringHeight() then
+		bottomPadding = bottomPadding + 2
+	end
 	entry:SetHeight(projectedHeight + bottomPadding)
 	entry:SetShown(req ~= nil)
 
