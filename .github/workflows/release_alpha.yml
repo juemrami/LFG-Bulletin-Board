@@ -34,16 +34,16 @@ jobs:
       - name: Package and release
         uses: BigWigsMods/packager@v2.3.1
         with:
-          args: -g cata -n "{package-name}-{game-type}-{release-type}-{project-abbreviated-hash}"
+          args: -g cata -n "{package-name}-{release-type}-{project-abbreviated-hash}"
 
-      # Release as Alpha on github with the alpha tag
+      # Release as Alpha/Beta on dev working branch
       # move this to a tag action at somepoint
       - name: create GIT_TAG env variable
         run: echo "GIT_TAG=`echo $(git tag --points-at HEAD)`" >> $GITHUB_ENV
 
       - name: Create alpha github release
         uses: softprops/action-gh-release@v2
-        if: ${{ startsWith(env.GIT_TAG, 'alpha')}}
+        if: ${{ startsWith(env.GIT_TAG, 'alpha') || startsWith(env.GIT_TAG, 'beta')}}
         with:
           tag_name: ${{ env.GIT_TAG }}
           files: ./.release/*.zip
