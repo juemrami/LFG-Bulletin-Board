@@ -53,6 +53,32 @@ local function requestSort_nTOP_nTOTAL (a,b)
 	return false
 end
 
+function LFGSearch(categoryId, baseFilter, activityId)
+    local filterVal = 0
+    if categoryId == 2 then
+        filterVal = 1
+    end
+
+    local languages = C_LFGList.GetLanguageSearchFilter();
+    C_LFGList.Search(categoryId, filterVal, baseFilterVal, languages)
+end
+
+----------------------------------------------------
+local categories = {
+	2, -- Dungeons
+	114, -- Raids
+	120, -- Misc
+}
+local curr = 1
+function GBB.BtnRefresh(button)
+	if curr > #categories then
+		curr = 1
+	end
+	LFGSearch(categories[curr])
+	GBB.GetLfgList()
+	curr = curr + 1
+end
+
 local function WhoRequest(name)
 	--DEFAULT_CHAT_FRAME:AddMessage(GBB.MSGPREFIX .. string.format(GBB.L["msgStartWho"],name))
 	--DEFAULT_CHAT_FRAME.editBox:SetText("/who " .. name)
@@ -134,14 +160,11 @@ end
 
 
 function GBB.GetLfgList()
-
 	local totalResultsFound, results = C_LFGList.GetSearchResults()
-
 	for _, v in pairs(results) do
 		local dungeonTXT=""
 
         local searchResultData = C_LFGList.GetSearchResultInfo(v)
-
         if searchResultData.isDelisted == false then
             local requestTime=time() -  searchResultData.age
 
@@ -149,13 +172,12 @@ function GBB.GetLfgList()
             if searchResultData.comment ~= nil and string.len(searchResultData.comment) > 2 then
                 msg = searchResultData.comment
             end
-
+				tinsert(searchResultData.activityIDs or {}, searchResultData.activityID)
                 for _, activityID in pairs(searchResultData.activityIDs) do
                     local activityInfo = C_LFGList.GetActivityInfoTable(activityID)
                     local activityGroupName, _ = C_LFGList.GetActivityGroupInfo(activityInfo.groupFinderActivityGroupID)
-                    local combinedMsg = activityInfo.fullName .. " " .. activityGroupName
+                    local combinedMsg = activityInfo.fullName .. " " .. (activityGroupName or "")
                     local dungeonList, _, _, _, isHeroic = GBB.GetDungeons(combinedMsg, searchResultData.leaderName)
-
                     for dungeon, id in pairs(dungeonList) do
                         local index=0
                         if id== true and dungeon~=nil then
@@ -174,7 +196,7 @@ function GBB.GetLfgList()
                                 local partyInfo = GBB.GetPartyInfo(searchResultData.searchResultID, searchResultData.numMembers)
                                 index=#GBB.LfgRequestList +1
                                 GBB.LfgRequestList[index]={}
-                                GBB.LfgRequestList[index].class=classLocalized
+                                GBB.LfgRequestList[index].class=class
                                 GBB.LfgRequestList[index].partyInfo=partyInfo
                                 GBB.LfgRequestList[index].start=requestTime
                                 GBB.LfgRequestList[index].dungeon=dungeon
@@ -405,7 +427,7 @@ local function CreateItem(yy,i,doCompact,req,forceHight)
         local roles = ""
         
         for _, v in pairs(req.partyInfo) do 
-			if (v.classLocalized == "ROGUE" or v.classLocalized == "WARLOCK" or v.classLocalized == "MAGE") then 
+			if (v.class == "ROGUE" or v.class == "WARLOCK" or v.class == "MAGE") then 
 				roles = roles..GBB.Tool.RoleIcon["DAMAGER"]
 			elseif (v.class == "DAMAGER") then
                 roles = roles..GBB.Tool.RoleIcon["DAMAGER"]
