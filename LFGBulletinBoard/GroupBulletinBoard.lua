@@ -666,6 +666,7 @@ function GBB.Init()
 	
 	---@type EditBox # making this local isnt required, just here for the luals linter
 	local GroupBulletinBoardFrameResultsFilter = _G["GroupBulletinBoardFrameResultsFilter"];
+	GroupBulletinBoardFrameResultsFilter:SetParent(GroupBulletinBoardFrame_ScrollFrame)
 	GroupBulletinBoardFrameResultsFilter.filterPatterns = { };
 	GroupBulletinBoardFrameResultsFilter:SetFontObject(GBB.DB.FontSize);
 	GroupBulletinBoardFrameResultsFilter:SetTextColor(1, 1, 1, 1);
