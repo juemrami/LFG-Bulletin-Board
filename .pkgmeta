@@ -3,5 +3,4 @@ package-as: LFGBulletinBoard
 move-folders:
     LFGBulletinBoard/LFGBulletinBoard: LFGBulletinBoard
 
-manual-changelog:
-    changelog.txt
+manual-changelog: LFGBulletinBoard/changelog.txt
