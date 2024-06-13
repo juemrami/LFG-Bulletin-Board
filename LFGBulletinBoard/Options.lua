@@ -1,5 +1,5 @@
 local TOCNAME,
-	---@class Addon_Options : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_Tags
+	---@class Addon_Options : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_LibGPIOptions, Addon_Tags
 	GBB= ...;
 local ChannelIDs
 local ChkBox_FilterDungeon
@@ -399,6 +399,12 @@ function GBB.OptionsInit ()
 	-- Vanilla Filters
 	GenerateExpansionPanel(GBB.Enum.Expansions.Classic)
 		
+	----------------------------------------------------------
+	-- Custom Filters/Categories
+	----------------------------------------------------------
+	local panelFrame = GBB.Options.AddPanel(ADDITIONAL_FILTERS, false, true);
+	GBB:UpdateAdditionalFiltersPanel(panelFrame)
+	
 	----------------------------------------------------------
 	-- Language Tags and Search Patterns
 	----------------------------------------------------------
