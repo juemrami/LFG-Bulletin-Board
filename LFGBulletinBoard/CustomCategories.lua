@@ -86,6 +86,16 @@ local presets = {
         isDisabled = false,
         sortIdx = 2,
     }, 
+    TRANSMOG = {
+        name = "Transmog Runs",
+        key = "TRANSMOG",
+        tags = {
+            enUS = "transmog tmog xmog mog",
+        },
+        levels = CopyTable(HIDDEN_LEVEL_RANGE),
+        isDisabled = not isCataclysm,
+        sortIdx = 3,
+    }
 }
 
 --- Initializes and validates saved variable table entries for custom user filters/categories.
