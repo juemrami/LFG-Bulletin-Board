@@ -22,6 +22,10 @@ local CONFIRM_REMOVAL = CONFIRM_GLYPH_REMOVAL:gsub("%%s", "\"%%s\"") -- "Are you
 local FILTER_REMOVAL_WARNING = CONFIRM_REMOVAL..PERMANENT_ACTION_WARNING 
 local CHARACTER_SPECIFIC_SYMBOL = "\42" -- "*"
 
+local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local isCataclysm = WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC
+local isSoD = isClassicEra and C_Seasons.GetActiveSeason() == Enum.SeasonID.SeasonOfDiscovery
+
 ---@alias Locale "enUS"|"enGB"|"deDE"|"ruRU"|"frFR"|"zhTW"|"zhCN"|"ptBR"|"esES"|"koKR"
 
 ---@class CustomFilter
@@ -29,44 +33,98 @@ local CHARACTER_SPECIFIC_SYMBOL = "\42" -- "*"
 ---@field key string
 ---@field tags table<Locale, string>
 ---@field levels {[1]: number, [2]: number}
----@field sortIdx number
----@field isHidden boolean? # `true` if the preset should be completely hidden from the user
+---@field sortIdx number # ties broken by key alphabetically. preset value is relatively arbitrary.
+---@field isHidden boolean? # `true` if the filter should be hidden from UI. (used instead of deletion for saved presets)
+---@field isDisabled boolean # `true` if the preset should be completely disabled for the current client (used by presets only)
 
 ---@type {[string]: CustomFilter}
 local presets = {
-    ["BOOSTS"] = {
+    RDF = { -- Random Dungeon Finder
+        name = LFG_TYPE_RANDOM_DUNGEON,
+        tags = {
+            enUS = "rdf random dungeons spam heroics gamma gammas",
+            -- deDE = nil,
+            -- ruRU = nil,
+            -- frFR = nil,
+            -- zhTW = nil,
+            -- zhCN = nil,
+            -- ptBR = nil,
+            -- esES = nil,
+        },
+        key = "RDF",
+        levels = CopyTable(HIDDEN_LEVEL_RANGE),
+        isDisabled = not isCataclysm,
+        sortIdx = 1,
+    },
+    BLOOD = { -- Bloodmoon Event (SoD)
+        name = "Bloodmoon",
+        tags = {
+            enUS = "blood bloodmoon bm",
+        },
+        key = "BLOOD",
+        levels = CopyTable(HIDDEN_LEVEL_RANGE),
+        isDisabled = not isSoD,
+        sortIdx = 1,
+    },
+    INCUR = { -- Incursion Event (SoD)
+        name = "Incursions",
+        tags = {
+            enUS = "inc incur incursion incursions loops",
+        },
+        key = "INCUR",
+        levels = CopyTable(HIDDEN_LEVEL_RANGE),
+        isDisabled = not isSoD,
+        sortIdx = 2,
+    },
+    BOOSTS = {
         name = "Boosting Services",
         key = "BOOSTS",
         tags = {
             enUS = "boost boosting" ,
         },
         levels = CopyTable(HIDDEN_LEVEL_RANGE),
-        isHidden = nil,
-        sortIdx = 1,
-    }
+        isDisabled = false,
+        sortIdx = 2,
+    }, 
 }
 
-
+--- Initializes and validates saved variable table entries for custom user filters/categories.
 function Addon.InitializeCustomFilters()
     assert(GroupBulletinBoardDB, "`GroupBulletinBoardDB` not found in `InitializeCustomFilters()`. Initialize *after* ADDON_LOADED event")
-    if not GroupBulletinBoardDB.CustomFilters then
-        ---@type {[string]: CustomFilter}
-        GroupBulletinBoardDB.CustomFilters = CopyTable(presets)
-    end
-    -- insert any enabled presets into the `CustomFilters` table
+    if not GroupBulletinBoardDB.CustomFilters then GroupBulletinBoardDB.CustomFilters = {} end
+    
+    -- insert any client *enabled* presets into the `CustomFilters` table
     for key, preset in pairs(presets) do
-        local store = GroupBulletinBoardDB.CustomFilters[key]
-        if not store and not preset.isHidden then
+        local stored = GroupBulletinBoardDB.CustomFilters[key]
+        -- hide any saved presets that are disabled for current client
+        if stored and preset.isDisabled then
+            stored.isHidden = true -- this allows hiding SoD specific presets in Era realms
+        end
+        if not stored and not preset.isDisabled then
             GroupBulletinBoardDB.CustomFilters[key] = CopyTable(preset)
+            GroupBulletinBoardDB.CustomFilters[key].isDisabled = nil
         end
     end
-    -- use this point to perform any db migrations. Like removing deprecated keys.
+
+    -- validate saved entries
     local invalidKeys = {}
-    for _, entry in pairs(GroupBulletinBoardDB.CustomFilters) do
-        -- invalid entries
-        if not entry.name or entry.name == "" then
-            if entry.key then entry.name = entry.key
-            else tinsert(invalidKeys, entry.key) end
+    for key, entry in pairs(GroupBulletinBoardDB.CustomFilters) do
+        if entry.key then
+            if not entry.name or entry.name == "" then
+                entry.name = (presets[key] and presets[key].name) or key
+            end
+            if type(entry.tags) ~= "table" then
+                entry.tags = (presets[key] and presets[key].tags) or {}
+            end
+            if type(entry.levels) ~= "table" then
+                entry.levels = CopyTable(HIDDEN_LEVEL_RANGE)
+            end
+            if type(entry.sortIdx) ~= "number" then
+                entry.sortIdx = 1
+            end
+        else
+            -- remove entries with missing keys (shouldn't happen, but just in case)
+            tinsert(invalidKeys, key)
         end
     end
     for _, key in ipairs(invalidKeys) do
@@ -95,26 +153,35 @@ function Addon.GetCustomFilterKeys()
     return keys
 end
 
----@param tagListByLoc {[Locale]: {[string]: string[]}}
----@return boolean anyAdded `true` if any tags were inserted into the tag list
-function Addon.AddCustomFilterTags(tagListByLoc)
+---@param tagListByLoc {[Locale]: {[string]: string[]}} expects the dungeonTagsLoc table
+function Addon.SyncCustomFilterTags(tagListByLoc)
     isInitializedOrPanic()
-    local filterKeys = Addon.GetCustomFilterKeys()
-    local customFiltersDB = GroupBulletinBoardDB.CustomFilters
-    local anyAdded = false
-    for _, customKey in ipairs(filterKeys) do
-        local entry = customFiltersDB[customKey]
+    local customStore = GroupBulletinBoardDB.CustomFilters
+    local validKeys = tInvert(Addon.GetCustomFilterKeys())
+    for _, entry in pairs(customStore) do
         -- hack: add enGB entries for enUS.(tagListByLoc expects enGB)          
         -- should move away from enGB to enUS at some point. GetLocale never returns enGB
-        entry.tags.enGB = entry.tags.enUS
-        for locale, tagList in pairs(tagListByLoc) do
-            if entry.tags[locale] then
-                tagList[entry.key] = {strsplit(" ", entry.tags[locale])}
-                anyAdded = true
+        entry.tags.enGB = entry.tags.enUS 
+    end
+    for locale, tagList in pairs(tagListByLoc) do
+        for tagKey, _ in pairs(tagList) do
+            if tagKey:match(USER_KEY_IDX_CAPTURE) 
+            or presets[tagKey]
+            then -- Update any existing and valid custom categories tags
+                local entry = customStore[tagKey]
+                -- note: presets aren't deleted just hidden.
+                local tagString = (entry and not entry.isHidden) and entry.tags[locale]
+                tagListByLoc[locale][tagKey] = tagString and {strsplit(" ", tagString)} or nil
+                validKeys[tagKey] = nil
             end
         end
     end
-    return anyAdded
+    for key, _ in pairs(validKeys) do -- Add any missing valid custom categories
+        local entry = customStore[key]
+        for locale, _ in pairs(tagListByLoc) do
+            tagListByLoc[locale][key] = entry.tags[locale] and {strsplit(" ", entry.tags[locale])} or nil
+        end
+    end
 end
 
 ---@return {[string]: string} nameList map of `[tagKey] => displayName`
@@ -144,7 +211,9 @@ function Addon.GetAllCustomFilterLevels()
     return ranges
 end
 
-local updateRelatedAddonData = function(tagsOnly)
+---@param tagsOnly boolean? If true, skips updating the dungeon Names/Levels and Sort tables (for tag updates)
+---@param skipTags boolean? If true, skips updating the dungeonTagsLoc table (for renames/sorting/level changes)
+local updateRelatedAddonData = function(tagsOnly, skipTags)
     ---@cast Addon Addon_GroupBulletinBoard
 	-- Get localize and Dungeon-Information
 	assert(Addon.dungeonNames and Addon.dungeonTagsLoc and Addon.dungeonSort,
@@ -159,10 +228,10 @@ local updateRelatedAddonData = function(tagsOnly)
         ---@diagnostic disable-next-line: redundant-parameter
         Addon.dungeonSort = Addon.GetDungeonSort(Addon:GetCustomFilterKeys());
     end
-    -- Add tags for custom categories into `dungeonTagsLoc`. 
-    Addon.AddCustomFilterTags(Addon.dungeonTagsLoc);
-    Addon.CreateTagList()
-                            
+    if not skipTags then -- Add tags for custom categories into `dungeonTagsLoc`.
+        Addon.SyncCustomFilterTags(Addon.dungeonTagsLoc);
+        Addon.CreateTagList()
+    end                     
 end
 local AddNewFilterToStore = function(name)
     local entries = GroupBulletinBoardDB.CustomFilters
@@ -247,6 +316,28 @@ local removeFilterFromRequestList = function(key) ---@param key string
     end
 end
 
+local addPresetsToUserStore = function()
+    local anyAdded = false
+    for key, preset in pairs(presets) do
+        local saved = GroupBulletinBoardDB.CustomFilters[key]
+        if saved then -- careful with creating duplicates           
+            if saved.isHidden and not preset.isDisabled then
+            -- saved presets are hidden instead of deleted.
+               saved.isHidden = false -- Match addon's preset state.
+               -- hack: sorts to top (requires call to `fixSavedFiltersSorts`)
+               saved.sortIdx = 0
+               anyAdded = true
+            end
+        elseif not preset.isDisabled then
+            GroupBulletinBoardDB.CustomFilters[key] = CopyTable(preset)
+            GroupBulletinBoardDB.CustomFilters[key].sortIdx = 0
+            GroupBulletinBoardDB.CustomFilters[key].isDisabled = nil
+            anyAdded = true
+        end
+    end
+    return anyAdded
+end
+
 StaticPopupDialogs["GBB_CREATE_CATEGORY"] = {
     text = ENTER_FILTER_NAME,
     button1 = CREATE,
@@ -255,7 +346,7 @@ StaticPopupDialogs["GBB_CREATE_CATEGORY"] = {
         PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON);
 		local name = strtrim(self.editBox:GetText());
 		AddNewFilterToStore(name);
-        updateRelatedAddonData()
+        updateRelatedAddonData(nil, true) -- skips inserting tags (none yet)
         Addon.UpdateAdditionalFiltersPanel(data.panel)
     end,
     EditBoxOnTextChanged = function(self)
@@ -270,13 +361,14 @@ StaticPopupDialogs["GBB_CREATE_CATEGORY"] = {
         if name == "" then return end
         PlaySound(SOUNDKIT.IG_MAINMENU_OPEN);
 		AddNewFilterToStore(name);
-        updateRelatedAddonData()
+        updateRelatedAddonData(nil, true)
         Addon.UpdateAdditionalFiltersPanel(self:GetParent().data.panel)
 		self:GetParent():Hide();
 	end,
     OnShow = function(self)
         self.button1:SetEnabled(false)
     end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
 	hideOnEscape = 1,
 	hasEditBox = 1,
 	maxLetters = 31
@@ -293,7 +385,7 @@ StaticPopupDialogs["GBB_RENAME_CATEGORY"] = {
         if name == "" then return end
         entry.name = name
         data.settings:UpdateFilterState(data.options, entry)
-        updateRelatedAddonData()
+        updateRelatedAddonData(nil, true) -- skips inserting tags (none changed)
     end,
     EditBoxOnTextChanged = function(self)
 		if (strtrim(self:GetText()) == "" ) then
@@ -311,12 +403,19 @@ StaticPopupDialogs["GBB_RENAME_CATEGORY"] = {
         if not entry then return end
         entry.name = name
         data.settings:UpdateFilterState(data.options, entry)
-        updateRelatedAddonData()
+        updateRelatedAddonData(nil, true)
         self:GetParent():Hide();
 	end,
     OnShow = function(self)
         self.button1:SetEnabled(false)
+        local preset = presets[self.data.key]
+        if preset then
+            self.editBox:SetText(preset.name)
+            self.editBox:HighlightText()
+            self.editBox:SetCursorPosition(0)
+        end
     end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
 	hideOnEscape = true,
 	hasEditBox = 1,
 	maxLetters = 31
@@ -332,13 +431,14 @@ StaticPopupDialogs["GBB_DELETE_CATEGORY"] = {
             -- reset to base state, and disable
             saved = CopyTable(presets[data.key])
             saved.isHidden = true
+            saved.isDisabled = nil
             GroupBulletinBoardDB.CustomFilters[data.key] = saved
         else
             GroupBulletinBoardDB.CustomFilters[data.key] = nil 
         end
         GroupBulletinBoardDBChar["FilterDungeon"..data.key] = nil
         fixSavedFiltersSorts()
-        updateRelatedAddonData()
+        updateRelatedAddonData() -- full update
         removeFilterFromRequestList(data.key)
         Addon.UpdateAdditionalFiltersPanel(data.panel)
     end,
@@ -507,7 +607,7 @@ local FilterSettingsPool = {
                 editBox:SetPoint("LEFT", editBox.label, "RIGHT", labelSpacing, 0);
                 editBox:SetScript("OnEnterPressed", function()
                     dbEntry.tags[locale] = (editBox:GetText() or ""):lower()
-                    updateRelatedAddonData(true)
+                    updateRelatedAddonData(true) -- skips names/levels/sorts. **only** updates tags
                     editBox:ClearFocus()
                     editBox:SetText(dbEntry.tags[locale])
                 end)
@@ -607,27 +707,11 @@ local FilterSettingsPool = {
         addPresetsBtn:SetText(DEFAULTS)
         addPresetsBtn:FitToText()
         addPresetsBtn:SetScript("OnClick", function()
-            local anyAdded = false
-            for key, preset in pairs(presets) do
-                local saved = GroupBulletinBoardDB.CustomFilters[key]
-                if saved and saved.isHidden ~= preset.isHidden then
-                    -- Dont reset here, the preset could be hidden because of game type like SoD, and we dont want-
-                    -- to reset any user modifications to the preset if they hit "reset" when logged into regular era. 
-                    -- Should have been reset if it was ever deleted, see StaticPopupDialogs["GBB_DELETE_CATEGORY"].
-                    saved.isHidden = preset.isHidden
-                    -- hack: to sort to top, make sure to call `fixSavedFiltersSorts`
-                    saved.sortIdx = 0 
-                    anyAdded = true
-                elseif not preset.isHidden then
-                    GroupBulletinBoardDB.CustomFilters[key] = CopyTable(preset)
-                    GroupBulletinBoardDB.CustomFilters[key].sortIdx = 0
-                    anyAdded = true
-                end
-            end
+            local anyAdded = addPresetsToUserStore()
             if anyAdded then
-                PlaySound(SOUNDKIT.IG_MAINMENU_OPEN)
-                updateRelatedAddonData()
                 fixSavedFiltersSorts()
+                updateRelatedAddonData() -- full update
+                PlaySound(SOUNDKIT.IG_MAINMENU_OPEN)
                 Addon.UpdateAdditionalFiltersPanel(parent)
             end
         end)

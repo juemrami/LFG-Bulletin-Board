@@ -1,5 +1,5 @@
 local TOCNAME,
-	---@class Addon_GroupBulletinBoard : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_Tags, Addon_Options
+	---@class Addon_GroupBulletinBoard : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_Tags, Addon_Options, Addon_Tool
 	GBB = ...;
 
 GroupBulletinBoard_Addon=GBB
@@ -554,7 +554,7 @@ function GBB.Init()
 
 	-- Add tags for custom categories into `dungeonTagsLoc`. 
 	-- Must do before the call to `GBB.CreateTagList()` below
-	GBB.AddCustomFilterTags(GBB.dungeonTagsLoc);
+	GBB.SyncCustomFilterTags(GBB.dungeonTagsLoc);
 
 	-- Reset Request-List
 	GBB.RequestList={}
@@ -666,6 +666,7 @@ function GBB.Init()
 	
 	---@type EditBox # making this local isnt required, just here for the luals linter
 	local GroupBulletinBoardFrameResultsFilter = _G["GroupBulletinBoardFrameResultsFilter"];
+	GroupBulletinBoardFrameResultsFilter:SetParent(GroupBulletinBoardFrame_ScrollFrame)
 	GroupBulletinBoardFrameResultsFilter.filterPatterns = { };
 	GroupBulletinBoardFrameResultsFilter:SetFontObject(GBB.DB.FontSize);
 	GroupBulletinBoardFrameResultsFilter:SetTextColor(1, 1, 1, 1);
@@ -732,8 +733,8 @@ function GBB.Init()
 		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabGroup, GroupBulletinBoardFrame_GroupFrame);
 		GroupBulletinBoardFrame_GroupFrame:Hide()
 		
-		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
-		GroupBulletinBoardFrame_LfgFrame:Hide()
+		GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
+		-- GroupBulletinBoardFrame_LfgFrame:Hide()
 	end
 	GBB.Tool.SelectTab(GroupBulletinBoardFrame,1)
 	-- if GBB.DB.EnableGroup then
@@ -820,10 +821,9 @@ local function Event_CHAT_MSG_SYSTEM(arg1)
 		
 		if info~="" then
 			local txt
-			
 			if class and class~="" then 
 				txt="|Hplayer:"..name.."|h"
-					..(GBB.Tool.GetClassIcon(req.class) or "")
+					..(GBB.Tool.GetClassIcon(class) or "")
 					.."|c"..GBB.Tool.ClassColor[class].colorStr .. name.."|r"
 					..symbol.."|h";
 			else
