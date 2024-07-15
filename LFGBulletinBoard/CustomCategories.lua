@@ -96,6 +96,16 @@ local presets = {
         isDisabled = false,
         sortIdx = 2,
     }, 
+    WORLDBOSS = { -- World Bosses
+        name = RAID_INFO_WORLD_BOSS,
+        key = 'WORLDBOSS',
+        tags = {
+            enUS = 'wboss wbosses kazzak kazak azuregos azurgos azy azzy',
+        },
+        levels = {60, 60},
+        isDisabled = not isSoD, -- not for cata/era/hc
+        sortIdx = 2,
+    },
 }
 
 --- Initializes and validates saved variable table entries for custom user filters/categories.
@@ -585,6 +595,7 @@ local FilterSettingsPool = {
                 local editBox = options.patterns[locale] 
                 options.directions:SetPoint("LEFT", editBox, "LEFT")
                 editBox:SetText(tagString or "")
+                editBox:SetCursorPosition(0) -- reset cursor position incase text is long
                 editBox:SetWidth(EDITBOX_WIDTH)
                 if filterEnabled then
                     editBox:SetTextColor(WHITE_FONT_COLOR:GetRGBA())
