@@ -710,6 +710,7 @@ function GBB.Init()
 	
 	---@type EditBox # making this local isnt required, just here for the luals linter
 	local GroupBulletinBoardFrameResultsFilter = _G["GroupBulletinBoardFrameResultsFilter"];
+	GroupBulletinBoardFrameResultsFilter:SetParent(GroupBulletinBoardFrame_ScrollFrame)
 	GroupBulletinBoardFrameResultsFilter.filterPatterns = { };
 	GroupBulletinBoardFrameResultsFilter:SetFontObject(GBB.DB.FontSize);
 	GroupBulletinBoardFrameResultsFilter:SetTextColor(1, 1, 1, 1);
@@ -762,12 +763,18 @@ function GBB.Init()
 
 	if isClassicEra then
 		GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabRequest, GroupBulletinBoardFrame_ScrollFrame);
-		
 		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabGroup, GroupBulletinBoardFrame_GroupFrame);
 		GroupBulletinBoardFrame_GroupFrame:Hide()
-		
-		-- Group Finder doesnt exist in classic era
-		GroupBulletinBoardFrame_LfgFrame:Hide()
+		-- LFG Tool is currently only in fresh servers and SoD
+		local serverType = C_Seasons.GetActiveSeason()
+		if (serverType == Enum.SeasonID.SeasonOfDiscovery) 
+		or (serverType == Enum.SeasonID.Fresh)
+		or (serverType == Enum.SeasonID.FreshHardcore)
+		then
+			GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
+		else
+			GroupBulletinBoardFrame_LfgFrame:Hide()
+		end
 	else -- cata client
 		-- Hide all tabs except requests for the time being
 		
@@ -776,8 +783,8 @@ function GBB.Init()
 		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabGroup, GroupBulletinBoardFrame_GroupFrame);
 		GroupBulletinBoardFrame_GroupFrame:Hide()
 		
-		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
-		GroupBulletinBoardFrame_LfgFrame:Hide()
+		GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
+		-- GroupBulletinBoardFrame_LfgFrame:Hide()
 	end
 	GBB.Tool.SelectTab(GroupBulletinBoardFrame,1)
 	local enableGroupVar = GBB.OptionsBuilder.GetSavedVarHandle(GBB.DB, "EnableGroup")
