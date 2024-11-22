@@ -1,5 +1,5 @@
 local TOCNAME,
-	---@class Addon_GroupBulletinBoard : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_Tags, Addon_Options
+	---@class Addon_GroupBulletinBoard : Addon_Localization, Addon_CustomFilters, Addon_Dungeons, Addon_Tags, Addon_Options, Addon_Tool
 	GBB = ...;
 
 GroupBulletinBoard_Addon=GBB
@@ -46,6 +46,34 @@ GBB.ShouldReset = false
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 -- Tools
 -------------------------------------------------------------------------------------
+local debug = false -- dev override
+local print = function(...)
+	if (GBB.DB and GBB.DB.OnDebug) or debug then
+		_G.print(WrapTextInColorCode(("[%s]:"):format(TOCNAME), NORMAL_FONT_COLOR:GenerateHexColor()), ...);
+	end
+end
+
+-- Uniquely inserts, if value is already present it is shifted to the end of the table.
+---@generic T
+---@type fun(tbl: T[], value:any): nil
+local insertUnique = function(tbl, value)
+	local last = #tbl
+	-- reorder value if found
+	for i = 1, last do
+		if tbl[i] == value and i ~= last then
+			for j = i, last do
+				if tbl[j + 1] then tbl[j] = tbl[j + 1];
+				else
+					tbl[j] = value
+					break;
+				end
+			end
+			return; -- return after reorder
+		end
+	end
+	-- simply insert if not found
+	tbl[last + 1] = value
+end
 
 function GBB.AllowInInstance()
 	local inInstance, instanceType = IsInInstance()
@@ -331,7 +359,7 @@ end
 
 function GBB.BtnSettings(button )
 	if button == "LeftButton" then
-		GBB.Options.Open(1)
+		GBB.OptionsBuilder.OpenCategoryPanel(1)
 	else
 		GBB.Popup_Minimap("cursor",false)
 		--GBB.Options.Open(1)
@@ -341,99 +369,110 @@ end
 function GBB.BtnRefresh(button)
 	GBB.UpdateLfgTool()
 end
-
-
---Tag Lists
----------------------------------------------------
-
----Sets the `GBB.tagList` table, specified by locale. 
----@param loc string The locale to create the tag list for.
-function GBB.CreateTagListLOC(loc)
-	for _,tag in pairs(GBB.badTagsLoc[loc]) do
-		if GBB.DB.OnDebug and GBB.tagList[tag]~=nil then
-			print(GBB.MSGPREFIX.."DoubleTag:"..tag.." - "..GBB.tagList[tag].." / "..GBB.TAGBAD)
-		end	
+--------------------------------------------------------------------------------
+-- Tag Lists
+--------------------------------------------------------------------------------
+local tagCollisions
+local shouldUpdateTagKey = function(pattern, current, incoming)
+	assert(incoming, "shouldUpdateTagKey: incoming key is nil", pattern, current, incoming)
+	if current == incoming then return false end
+	if not current then return true end
+	incoming = GBB.GetDungeonInfo(incoming)
+	current = GBB.GetDungeonInfo(current); 
+	current = current and current.expansionID or -1
+	incoming = incoming and incoming.expansionID or -1
+	return incoming >= current
+end
+---Sets the `GBB.tagList` table with the tags specified by the given locale.
+---@param locale string The locale to create the tag list for.
+local function setTagListByLocale(locale)
+	for _,tag in pairs(GBB.badTagsLoc[locale]) do
 		GBB.tagList[tag]=GBB.TAGBAD		
 	end
-	
-	for _, tag in pairs(GBB.searchTagsLoc[loc]) do
-		if GBB.DB.OnDebug and GBB.tagList[tag]~=nil then
-			print(GBB.MSGPREFIX.."DoubleTag:"..tag.." - "..GBB.tagList[tag].." / "..GBB.TAGSEARCH)
-		end
+	for _, tag in pairs(GBB.searchTagsLoc[locale]) do
 		GBB.tagList[tag]=GBB.TAGSEARCH		
 	end
-	
-	for _, tag in pairs(GBB.suffixTagsLoc[loc]) do
-		if GBB.DB.OnDebug and tContains(GBB.suffixTags,tag) then
-			print(GBB.MSGPREFIX.."DoubleSuffix:"..tag)
-		end	
-		
-		if not tContains(GBB.suffixTags,tag) then 
-			tinsert(GBB.suffixTags,tag) 
-		end
+	for _, tag in pairs(GBB.suffixTagsLoc[locale]) do
+		insertUnique(GBB.suffixTags, tag)
 	end
-	
-	for dungeonKey, tagList in pairs(GBB.dungeonTagsLoc[loc]) do
+	for dungeonKey, tagList in pairs(GBB.dungeonTagsLoc[locale]) do
 		---@cast tagList string[]
 		---@cast dungeonKey string
 		for _, tag in pairs(tagList) do
-			if GBB.DB.OnDebug and GBB.tagList[tag]~=nil then
-				print(GBB.MSGPREFIX.."DoubleTag:"..tag.." - "..GBB.tagList[tag].." / "..dungeonKey)
+			local existingKey = GBB.tagList[tag] -- check for tag pattern collisions
+			if existingKey and existingKey ~= dungeonKey then 
+				tagCollisions[tag] = tagCollisions[tag] or { existingKey }
+				insertUnique(tagCollisions[tag], dungeonKey) -- track last prio'd key in collision
+				if shouldUpdateTagKey(tag, existingKey, dungeonKey) then
+					GBB.tagList[tag] = dungeonKey -- update tag-key assignment
+				else
+					--hack: re-insert existingKey at end of list (for formatting priority in debug output)
+					insertUnique(tagCollisions[tag], existingKey) 
+				end
+			else
+				GBB.tagList[tag] = dungeonKey -- init tag key assignment
 			end
-			GBB.tagList[tag] = dungeonKey
 		end
 	end
-
-	for _, tag in pairs(GBB.heroicTagsLoc[loc]) do
+	for _, tag in pairs(GBB.heroicTagsLoc[locale]) do
 		GBB.HeroicKeywords[tag] = 1
 	end
 end
 
+--- Populates tag related tables `tagList`, `suffixTags`, and `HeroicKeywords` with tags from all enabled locales.
+-- also populates from any set custom tags.
 function GBB.CreateTagList ()
 	GBB.tagList={}
 	GBB.suffixTags={}
 	GBB.HeroicKeywords={}
+	tagCollisions = {}
 
-	if GBB.DB.TagsEnglish then
-		GBB.CreateTagListLOC("enGB")
-	end
+	if GBB.DB.TagsEnglish then setTagListByLocale("enGB") end
 	if GBB.DB.TagsGerman then
 		--German tags need english!
 		if GBB.DB.TagsEnglish==false then
-			GBB.CreateTagListLOC("enGB")
+			setTagListByLocale("enGB")
 		end	
-		GBB.CreateTagListLOC("deDE")
+		setTagListByLocale("deDE")
 	end
-	if GBB.DB.TagsRussian then
-		GBB.CreateTagListLOC("ruRU")
-	end
-	if GBB.DB.TagsFrench then
-		GBB.CreateTagListLOC("frFR")
-	end
-	if GBB.DB.TagsZhtw then
-		GBB.CreateTagListLOC("zhTW")
-	end
-	if GBB.DB.TagsZhcn then
-		GBB.CreateTagListLOC("zhCN")
-	end
-	if GBB.DB.TagsPortuguese then
-		GBB.CreateTagListLOC("ptBR")
-	end
-	if GBB.DB.TagsSpanish then
-		GBB.CreateTagListLOC("esES")
-	end
+	if GBB.DB.TagsRussian then setTagListByLocale("ruRU") end
+	if GBB.DB.TagsFrench then setTagListByLocale("frFR") end
+	if GBB.DB.TagsZhtw then setTagListByLocale("zhTW") end
+	if GBB.DB.TagsZhcn then setTagListByLocale("zhCN") end
+	if GBB.DB.TagsPortuguese then setTagListByLocale("ptBR") end
+	if GBB.DB.TagsSpanish then setTagListByLocale("esES") end
 	if GBB.DB.TagsCustom then
 		GBB.searchTagsLoc["custom"]=GBB.Split(GBB.DB.Custom.Search)
 		GBB.badTagsLoc["custom"]=GBB.Split(GBB.DB.Custom.Bad)
 		GBB.suffixTagsLoc["custom"]=GBB.Split(GBB.DB.Custom.Suffix)
 		GBB.heroicTagsLoc["custom"]=GBB.Split(GBB.DB.Custom.Heroic)
-		
+
+		local sortedDungeonKeys = GBB.GetSortedDungeonKeys( -- dungeons & raids for all expansions
+			nil, {GBB.Enum.DungeonType.Dungeon, GBB.Enum.DungeonType.Raid}
+		)
+		-- insert a "custom" locale to `dungeonTagsLoc` for custom tags (before calling `setTagListByLocale`).
 		GBB.dungeonTagsLoc["custom"]={}
-		for index=1,GBB.WOTLKMAXDUNGEON do
-			GBB.dungeonTagsLoc["custom"][GBB.dungeonSort[index]]= GBB.Split(GBB.DB.Custom[GBB.dungeonSort[index]])
+		for _, key in ipairs(sortedDungeonKeys) do
+			GBB.dungeonTagsLoc['custom'][key] = GBB.Split(GBB.DB.Custom[key])
 		end
-		
-		GBB.CreateTagListLOC("custom")
+		setTagListByLocale("custom")
+	end
+
+	if GBB.DB.OnDebug and next(tagCollisions) then
+		print("Tag pattern collisions found:")
+		for tag, collisions in pairs(tagCollisions) do
+			local numCollisions = #collisions
+			if numCollisions > 1 then -- not a collision if only one key
+				for i = 1, numCollisions do
+					collisions[i] = ("(%s) %s"):format(
+						collisions[i],
+						WrapTextInColorCode(GBB.dungeonNames[collisions[i]], 'FFFFC56D')
+					)
+				end
+				print(WrapTextInColorCode(("'%s'"):format(tag), 'FFFF1B1B'),'=>', table.concat(collisions, ' | '))
+			end
+		end
+		print("Messages with these keywords may not be categorized as expected. Priority given to the last in list.")
 	end
 end
 
@@ -473,14 +512,14 @@ local function hooked_createTooltip(self)
 	end
 end
 
-function GBB.Popup_Minimap(frame,notminimap)
+function GBB.Popup_Minimap(frame,showMinimapOptions)
 	local txt="nil"
 	if type(frame)=="table" then txt=frame:GetName() or "nil" end
-	if not GBB.PopupDynamic:Wipe(txt..(notminimap and "notminimap" or "minimap")) then
+	if not GBB.PopupDynamic:Wipe(txt..(showMinimapOptions and "notminimap" or "minimap")) then
 		return
 	end
 
-	GBB.PopupDynamic:AddItem(GBB.L["HeaderSettings"],false, GBB.Options.Open, 1)
+	GBB.PopupDynamic:AddItem(GBB.L["HeaderSettings"],false, GBB.OptionsBuilder.OpenCategoryPanel, 1)
 	
 	GBB.PopupDynamic:AddItem("",true)
 	GBB.PopupDynamic:AddItem(GBB.L["CboxFilterTravel"],false,GBB.DBChar,"FilterDungeonTRAVEL")
@@ -489,10 +528,15 @@ function GBB.Popup_Minimap(frame,notminimap)
 	GBB.PopupDynamic:AddItem(GBB.L["CboxNotifyChat"],false,GBB.DB,"NotifyChat")
 	GBB.PopupDynamic:AddItem(GBB.L["CboxNotifySound"],false,GBB.DB,"NotifySound")
 	
-	if notminimap~=false then 
+	if showMinimapOptions ~= false then
 		GBB.PopupDynamic:AddItem("",true)
 		GBB.PopupDynamic:AddItem(GBB.L["CboxLockMinimapButton"],false,GBB.DB.MinimapButton,"lock")
-		GBB.PopupDynamic:AddItem(GBB.L["CboxLockMinimapButtonDistance"],false,GBB.DB.MinimapButton,"lockDistance")
+		-- disable whenever the minimap is in LibDBIcon mode
+		if GBB.MinimapButton.isLibDBIconAvailable and GBB.DB.MinimapButton.UseLibDBIcon then
+			GBB.PopupDynamic:AddItem(GBB.L['CboxLockMinimapButtonDistance'], true, {true}, 1);
+		else
+			GBB.PopupDynamic:AddItem(GBB.L['CboxLockMinimapButtonDistance'], false, GBB.DB.MinimapButton, 'lockDistance')
+		end
 	end
 	GBB.PopupDynamic:AddItem("",true)
 	GBB.PopupDynamic:AddItem(GBB.L["BtnCancel"],false)
@@ -554,7 +598,7 @@ function GBB.Init()
 
 	-- Add tags for custom categories into `dungeonTagsLoc`. 
 	-- Must do before the call to `GBB.CreateTagList()` below
-	GBB.AddCustomFilterTags(GBB.dungeonTagsLoc);
+	GBB.SyncCustomFilterTags(GBB.dungeonTagsLoc);
 
 	-- Reset Request-List
 	GBB.RequestList={}
@@ -626,8 +670,8 @@ function GBB.Init()
 				GBB.ResetWindow()
 				GBB.ShowWindow()
 			end},
-		{{"config","setup","options"},GBB.L["SlashConfig"],GBB.Options.Open,1},
-		{"about",GBB.L["SlashAbout"],GBB.Options.Open,7},
+		{{"config","setup","options"},GBB.L["SlashConfig"],GBB.OptionsBuilder.OpenCategoryPanel,1},
+		{"about",GBB.L["SlashAbout"],GBB.OptionsBuilder.OpenCategoryPanel, 6},
 		{"",GBB.L["SlashDefault"],GBB.ToggleWindow},
 		{"chat","",{
 			{{"organize", "clean"},GBB.L["SlashChatOrganizer"],function()
@@ -666,6 +710,7 @@ function GBB.Init()
 	
 	---@type EditBox # making this local isnt required, just here for the luals linter
 	local GroupBulletinBoardFrameResultsFilter = _G["GroupBulletinBoardFrameResultsFilter"];
+	GroupBulletinBoardFrameResultsFilter:SetParent(GroupBulletinBoardFrame_ScrollFrame)
 	GroupBulletinBoardFrameResultsFilter.filterPatterns = { };
 	GroupBulletinBoardFrameResultsFilter:SetFontObject(GBB.DB.FontSize);
 	GroupBulletinBoardFrameResultsFilter:SetTextColor(1, 1, 1, 1);
@@ -718,12 +763,18 @@ function GBB.Init()
 
 	if isClassicEra then
 		GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabRequest, GroupBulletinBoardFrame_ScrollFrame);
-		
 		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabGroup, GroupBulletinBoardFrame_GroupFrame);
 		GroupBulletinBoardFrame_GroupFrame:Hide()
-		
-		-- Group Finder doesnt exist in classic era
-		GroupBulletinBoardFrame_LfgFrame:Hide()
+		-- LFG Tool is currently only in fresh servers and SoD
+		local serverType = C_Seasons.GetActiveSeason()
+		if (serverType == Enum.SeasonID.SeasonOfDiscovery) 
+		or (serverType == Enum.SeasonID.Fresh)
+		or (serverType == Enum.SeasonID.FreshHardcore)
+		then
+			GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
+		else
+			GroupBulletinBoardFrame_LfgFrame:Hide()
+		end
 	else -- cata client
 		-- Hide all tabs except requests for the time being
 		
@@ -732,15 +783,23 @@ function GBB.Init()
 		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabGroup, GroupBulletinBoardFrame_GroupFrame);
 		GroupBulletinBoardFrame_GroupFrame:Hide()
 		
-		-- GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
-		GroupBulletinBoardFrame_LfgFrame:Hide()
+		GBB.Tool.AddTab(GroupBulletinBoardFrame, GBB.L.TabLfg, GroupBulletinBoardFrame_LfgFrame);
+		-- GroupBulletinBoardFrame_LfgFrame:Hide()
 	end
 	GBB.Tool.SelectTab(GroupBulletinBoardFrame,1)
-	-- if GBB.DB.EnableGroup then
-	-- 	GBB.Tool.TabShow(GroupBulletinBoardFrame, 3)
-	-- else		
-	-- 	GBB.Tool.TabHide(GroupBulletinBoardFrame, 3)
-	-- end
+	local enableGroupVar = GBB.OptionsBuilder.GetSavedVarHandle(GBB.DB, "EnableGroup")
+	local refreshGroupTab = function(isEnabled) -- previously done in `GBB.OptionsUpdate()`
+		if isEnabled then
+			-- Shows all active tabs.
+			GBB.Tool.TabShow(GroupBulletinBoardFrame)
+		else -- note: only the request-list tab is currently active on cata & era.
+			GBB.Tool.SelectTab(GroupBulletinBoardFrame, 1)
+			-- hide the "Remember past group members" aka "EnableGroup" tab should be the last tab
+			GBB.Tool.TabHide(GroupBulletinBoardFrame, isClassicEra and 2 or 3)
+		end
+	end
+	enableGroupVar:AddUpdateHook(refreshGroupTab)
+	refreshGroupTab(enableGroupVar:GetValue()) -- run once to match the set state.
 	
 	GBB.Tool.TabOnSelect(GroupBulletinBoardFrame,3,GBB.UpdateGroupList)
 	GBB.Tool.TabOnSelect(GroupBulletinBoardFrame,2,GBB.UpdateLfgTool)
@@ -820,10 +879,9 @@ local function Event_CHAT_MSG_SYSTEM(arg1)
 		
 		if info~="" then
 			local txt
-			
 			if class and class~="" then 
 				txt="|Hplayer:"..name.."|h"
-					..(GBB.Tool.GetClassIcon(req.class) or "")
+					..(GBB.Tool.GetClassIcon(class) or "")
 					.."|c"..GBB.Tool.ClassColor[class].colorStr .. name.."|r"
 					..symbol.."|h";
 			else

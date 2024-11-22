@@ -1,9 +1,10 @@
+
 local 	TOCNAME,GBB=...
 
 local MAXGROUP=500
 local LastUpdateTime = time()
 local requestNil={dungeon="NIL",start=0,last=0,name=""}
-
+local isCata = WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC
 local function requestSort_TOP_TOTAL (a,b)
 	if GBB.dungeonSort[a.dungeon] < GBB.dungeonSort[b.dungeon] then
 		return true
@@ -52,6 +53,44 @@ local function requestSort_nTOP_nTOTAL (a,b)
 	end
 	return false
 end
+
+local function LFGSearch(categoryId)
+    local filterVal = 0
+    -- if categoryId == 2 then
+    --     filterVal = 1
+    -- end
+
+	local preferredFilters
+    local languages = C_LFGList.GetLanguageSearchFilter() or {};
+	-- include addon set languages
+	languages.enUS =languages.enUS or GBB.DB.TagsEnglish
+	languages.deDE =languages.deDE or GBB.DB.TagsGerman
+	languages.ruRU =languages.ruRU or GBB.DB.TagsRussian
+	languages.frFR =languages.frFR or GBB.DB.TagsFrench
+	languages.zhTW =languages.zhTW or GBB.DB.TagsZhtw
+	languages.zhCN =languages.zhCN or GBB.DB.TagsZhcn
+	languages.esES =languages.esES or GBB.DB.TagsSpanish
+	languages.esMX =languages.esMX or GBB.DB.TagsSpanish
+	languages.ptBR =languages.ptBR or GBB.DB.TagsPortuguese
+    C_LFGList.Search(categoryId, filterVal, preferredFilters, languages)
+end
+
+----------------------------------------------------
+local categoryIdx = 0
+local lfgCategories = {
+	2, -- Dungeons
+	114, -- Raids
+	116, -- Quests & Zones
+	118, -- PVP (not enabled in cata clients atm)
+	120, -- "Custom"
+}
+function GBB.BtnRefresh(button)
+	categoryIdx = math.fmod(categoryIdx, #lfgCategories) + 1
+	LFGSearch(lfgCategories[categoryIdx])
+end
+
+-- hack: set the refresh button parent to the lfg frame. hides the button when the "Tool Requests" tab is not selected
+GroupBulletinBoardFrameRefreshButton:SetParent(GroupBulletinBoardFrame_LfgFrame)
 
 local function WhoRequest(name)
 	--DEFAULT_CHAT_FRAME:AddMessage(GBB.MSGPREFIX .. string.format(GBB.L["msgStartWho"],name))
@@ -123,11 +162,7 @@ local function createMenu(DungeonID,req)
 	GBB.PopupDynamic:AddItem(GBB.L["CboxNotifyChat"],false,GBB.DB,"NotifyChat")
 	GBB.PopupDynamic:AddItem(GBB.L["CboxRemoveRealm"],false,GBB.DB,"RemoveRealm")
 	GBB.PopupDynamic:AddItem("",true)
-	GBB.PopupDynamic:AddItem(GBB.L["HeaderSettings"],false, GBB.Options.Open, 1)
-
-	GBB.PopupDynamic:AddItem(GBB.L["PanelFilter"], false, GBB.Options.Open, 2)
-
-	GBB.PopupDynamic:AddItem(GBB.L["PanelAbout"], false, GBB.Options.Open, 3)
+	GBB.PopupDynamic:AddItem(SETTINGS, false, GBB.OptionsBuilder.OpenCategoryPanel, 1)
 	GBB.PopupDynamic:AddItem(GBB.L["BtnCancel"],false)
 	GBB.PopupDynamic:Show()
 end
@@ -170,11 +205,11 @@ function GBB.GetLfgList()
                             local isRaid = GBB.RaidList[dungeon] ~= nil
             
                             if index==0 then
-                                local role, class, classLocalized, specLocalized = C_LFGList.GetSearchResultMemberInfo(searchResultData.searchResultID, 1);
+								local playerInfo = C_LFGList.GetSearchResultPlayerInfo(searchResultData.searchResultID, 1)
                                 local partyInfo = GBB.GetPartyInfo(searchResultData.searchResultID, searchResultData.numMembers)
                                 index=#GBB.LfgRequestList +1
                                 GBB.LfgRequestList[index]={}
-                                GBB.LfgRequestList[index].class=classLocalized
+                                GBB.LfgRequestList[index].class=playerInfo.classFilename
                                 GBB.LfgRequestList[index].partyInfo=partyInfo
                                 GBB.LfgRequestList[index].start=requestTime
                                 GBB.LfgRequestList[index].dungeon=dungeon
@@ -208,34 +243,40 @@ function GBB.GetLfgList()
 end
 
 function GBB.UpdateLfgTool()
-    if LFGListFrame and LFGListFrame.CategorySelection.selectedCategory == 120 then return end
-    if  LFGListFrame and LFGListFrame.CategorySelection.selectedCategory == nil then  
-        LFGListFrame.CategorySelection.selectedCategory = 2
-    end
+	-- named differently on cata/era
+	local LFGListFrame = isCata and _G.LFGListFrame or _G.LFGListingFrame
+	if isCata then
+		if LFGListFrame and LFGListFrame.CategorySelection.selectedCategory == 120 then return end
+		if  LFGListFrame and LFGListFrame.CategorySelection.selectedCategory == nil then
+			LFGListFrame.CategorySelection.selectedCategory = 2
+		end
 
-    LastUpdateTime = time()
-    GBB.LfgRequestList = {}
-    
-    local category = 2
-    if LFGListFrame and LFGListFrame.CategorySelection.selectedCategory ~= nil then 
-        category = LFGListFrame.CategorySelection.selectedCategory
-    end
+		LastUpdateTime = time()
+		GBB.LfgRequestList = {}
 
-	local activities = C_LFGList.GetAvailableActivities(category)
-	--C_LFGList.Search(category, activities)
-    if LFGListFrame and LFGListFrame.searching then return end
+		local category = 2
+		if LFGListFrame and LFGListFrame.CategorySelection.selectedCategory ~= nil then
+			category = LFGListFrame.CategorySelection.selectedCategory
+		end
 
-	GBB.GetLfgList()
-    GBB.LfgUpdateList()
+		local activities = C_LFGList.GetAvailableActivities(category)
+		--C_LFGList.Search(category, activities)
+		if LFGListFrame and LFGListFrame.searching then return end
+	end
+
+		GBB.GetLfgList()
+		GBB.LfgUpdateList()
 end
 
 function GBB.UpdateLfgToolNoSearch()
-    if LFGListFrame.CategorySelection.selectedCategory == 120 then return end
-    if  LFGListFrame.CategorySelection.selectedCategory == nil then  
-        LFGListFrame.CategorySelection.selectedCategory = 2
-    end
+	if isCata then
+		if LFGListFrame.CategorySelection.selectedCategory == 120 then return end
+		if  LFGListFrame.CategorySelection.selectedCategory == nil then
+			LFGListFrame.CategorySelection.selectedCategory = 2
+		end
+	end
 
-if LFGListFrame and LFGListFrame.searching then return end
+	if LFGListFrame and LFGListFrame.searching then return end
 
     GBB.LfgRequestList = {}
     GBB.GetLfgList()

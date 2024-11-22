@@ -113,6 +113,21 @@ local dungeonTags = {
 		zhTW = "地穴",
 		zhCN = "地穴",
 	},
+	WB = { -- World Bosses
+		enGB = "azu azuregos azregos world bosses wboss kazzak kaz",
+		deDE = nil,
+		ruRU = nil,
+		frFR = nil,
+		zhTW = nil,
+		zhCN = nil,
+	},
+	CRY = { -- Crystal vale
+		enGB = "crystal vale thunderan thunderaan",
+		ruRU = nil,  
+		frFR = nil,  
+		zhTW = nil,
+		zhCN = nil,
+	},
 	AZN = { -- Azjol-Nerub
 		enGB = "azn an nerub",
 		deDE = nil,
@@ -164,7 +179,7 @@ local dungeonTags = {
 	BWD = { -- Blackwing Descent
 		enGB = "bwd descent bwd10 bwd25",
 		deDE = nil,
-		ruRU = nil,
+		ruRU = "ткт",
 		frFR = nil,
 		zhTW = nil,
 		zhCN = nil,
@@ -189,6 +204,14 @@ local dungeonTags = {
 		enGB = "brewfest brew coren dire direbrew beerfest",
 		deDE = nil,
 		ruRU = "хмельной фестиваль корен худовар",
+		frFR = nil,
+		zhTW = nil,
+		zhCN = nil,
+	},
+	DFC = { -- Demon Fall Canyon
+		enGB = "demonfall dfc demon fall canyon",
+		deDE = nil,
+		ruRU = nil,
 		frFR = nil,
 		zhTW = nil,
 		zhCN = nil,
@@ -246,8 +269,8 @@ local dungeonTags = {
 	NULL = { -- Fall of Deathwing
 
 	},
-	NULL = { -- Firelands
-
+	FL = { -- Firelands
+		enGB = "firelands fl ragnaros"
 	},
 	GNO = { -- Gnomeregan
 		enGB = "gnomer gno gnomeregan gnomeragan gnome gnomregan gnomragan gnom gnomergan",
@@ -603,7 +626,7 @@ local dungeonTags = {
 	BOT2 = { -- The Bastion of Twilight
 		enGB = "bot bastion twilight bot10 bot25",
 		deDE = nil,
-		ruRU = nil,
+		ruRU = "сб",
 		frFR = nil,
 		zhTW = nil,
 		zhCN = nil,
@@ -624,7 +647,7 @@ local dungeonTags = {
 		zhTW = "波塔 波卡",
 		zhCN = "生态船",
 	},	
-	NULL = { -- The Crown Chemical Co. (Love is in the Air)
+	LOVE = { -- The Crown Chemical Co. (Love is in the Air)
 
 	},	
 	COS = { -- The Culling of Stratholme
@@ -659,7 +682,8 @@ local dungeonTags = {
 		zhTW = nil,
 		zhCN = "灵魂洪炉",
 	},	
-	NULL = { -- The Frost Lord Ahune (Midsummer)
+	SUMMER = { -- The Frost Lord Ahune (Midsummer)
+		enGB = "ahune",
 	},	
 	HOLLOW = { -- The Headless Horseman
 		enGB = "headless horseman hollow",
@@ -737,10 +761,10 @@ local dungeonTags = {
 		zhCN = nil,
 	},
 	TOFW = { -- Throne of the Four Winds
-		enGB = "totfw toftw tofw four winds tofw10 tofw25",
-		deDE = nil,
-		ruRU = nil,
-		frFR = nil,
+		enGB = "totfw toftw tofw four winds tofw10 tofw25 tot4w to4w t4w",
+		deDE = "td4w t4w",
+		ruRU = "тчв",
+		frFR = "t4v t4w",
 		zhTW = nil,
 		zhCN = nil,
 	},	
@@ -1012,11 +1036,9 @@ local dungeonTags = {
 }
 dungeonTags["DEADMINES"] = { enGB = "dm" } -- should normalize "DM" to "DEADMINES" at somepoint.
 
---- Misc. Tags: 
--- id like to offload these to a seperate system at some point.
--- a more modular way of adding "categories" to the bulletin board
--- the tags and the key and the display name for the category would all be defined in the same place
-local otherTags = {
+--- Misc. categeories tags (these are core to the addon) 
+-- see `CustomCategories.lua` for additional user-editable categories/tags
+local miscTags = {
 	TRADE = { -- Trade Services
 	  enGB = "buy buying sell selling wts wtb hitem henchant htrade enchanter",
 	  deDE = "kaufe verkauf kauf verkaufe ah vk tg trinkgeld trinkgold vz schneider verzauberer verzaubere schliesskassetten schließkassetten kassetten schlossknacken schloßknacken alchimie",
@@ -1033,26 +1055,6 @@ local otherTags = {
 	  zhTW = nil,
 	  zhCN = nil,
 	},
-	BLOOD = isSoD and { -- Bloodmoon Event
-	  enGB = "blood bloodmoon bm",
-	  deDE = nil,
-	  ruRU = nil,
-	  frFR = nil,
-	  zhTW = nil,
-	  zhCN = nil,
-	} or nil,
-	INCUR = isSoD and { -- Incursion Event
-	  enGB = "inc incur incursion incursions incurusions loops",
-	  deDE = nil,
-	  ruRU = nil,
-	  frFR = nil,
-	  zhTW = nil,
-	  zhCN = nil,
-	} or nil,
-	--- Random Dungeon Finder
-	RDF = not isClassicEra and {
-	  enGB = "rdf random dungeons spam heroics",
-	} or nil
 }
 
 --- Secondary Dungeon Tags: related to identifying dungeon or activity name from a message.
@@ -1068,7 +1070,7 @@ local dungeonSecondTags = {
 -- Comaptibility reformatting of data back to original shape.
 -- [locale] => [dungeonKey]=> Array<tag>
 local dungeonTagsLoc = {}
-for _, categoryTags in pairs({dungeonTags, otherTags}) do
+for _, categoryTags in pairs({dungeonTags, miscTags}) do
 	for dungeonKey, tagsByLocale in pairs(categoryTags) do
 		tagsByLocale = langSplit(tagsByLocale)
 		for locale, tags in pairs(tagsByLocale) do
@@ -1105,7 +1107,7 @@ for locale, dungeonTags in pairs(GBB.dungeonTagsLoc) do
 	for dungeonKey, _ in pairs(dungeonTags) do
 		if not (validGameVersionKeys[dungeonKey] 
 			or GBB.dungeonSecondTags[dungeonKey]
-			or otherTags[dungeonKey])
+			or miscTags[dungeonKey])
 		then
 			GBB.dungeonTagsLoc[locale][dungeonKey] = nil
 		end
