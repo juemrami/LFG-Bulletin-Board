@@ -15,6 +15,7 @@ LibGPIToolBox.lua
 Chat.lua
 Localization.lua
 dungeons/classic.lua
+dungeons/wrath.lua
 dungeons/cata.lua
 CustomCategories.lua
 Tags.lua
