@@ -10,6 +10,7 @@ local PROJECT_EXPANSION_ID = {
 	[WOW_PROJECT_WRATH_CLASSIC] = GBB.Enum.Expansions.Wrath,
 	-- note: global not defined in classic era client
 	[WOW_PROJECT_CATACLYSM_CLASSIC or 0] = GBB.Enum.Expansions.Cataclysm,
+	[WOW_PROJECT_MISTS_CLASSIC or 0] = GBB.Enum.Expansions.Mists,
 }
 local EXPANSION_PROJECT_ID = tInvert(PROJECT_EXPANSION_ID)
 ---hack to remove "World of Warcraft: " from classic on esES/esMX clients
@@ -19,6 +20,7 @@ local EXPANSION_FILTER_NAME = {
 	[GBB.Enum.Expansions.BurningCrusade] = SUBTITLE_FORMAT:format(FILTERS, EXPANSION_NAME1),
 	[GBB.Enum.Expansions.Wrath] = SUBTITLE_FORMAT:format(FILTERS, EXPANSION_NAME2),
 	[GBB.Enum.Expansions.Cataclysm] = SUBTITLE_FORMAT:format(FILTERS, EXPANSION_NAME3),
+	[GBB.Enum.Expansions.Mists] = SUBTITLE_FORMAT:format(FILTERS, EXPANSION_NAME4),
 }
 
 ---@type {[number]: CheckButton[]} # Used by GetNumActiveFilters
@@ -505,17 +507,15 @@ function GBB.OptionsInit ()
 	----------------------------------------------------------
 	-- Expansion specific filters
 	----------------------------------------------------------
-	if not isClassicEra then 
-		--- Cata Filters
-		GenerateExpansionPanel(GBB.Enum.Expansions.Cataclysm)
-		--- Wrath Filters
-		GenerateExpansionPanel(GBB.Enum.Expansions.Wrath)
-		--- TBC Filters
-		GenerateExpansionPanel(GBB.Enum.Expansions.BurningCrusade)
+	local clientExpansionID = PROJECT_EXPANSION_ID[WOW_PROJECT_ID];
+	local expansionsEnumLookup = tInvert(GBB.Enum.Expansions)
+	-- generate panels from current client expansion down to classic era.
+	for expansionID = clientExpansionID, 0, -1 do
+		local expansion = expansionsEnumLookup[expansionID]
+		if expansion then
+			GenerateExpansionPanel(GBB.Enum.Expansions[expansion])
+		end
 	end
-	-- Vanilla Filters
-	GenerateExpansionPanel(GBB.Enum.Expansions.Classic)
-		
 	----------------------------------------------------------
 	-- Custom Filters/Categories
 	----------------------------------------------------------
