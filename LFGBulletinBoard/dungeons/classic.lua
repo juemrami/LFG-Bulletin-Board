@@ -38,6 +38,7 @@ local Expansions = {
 	BurningCrusade = 1,
 	Wrath = 2,
 	Cataclysm = 3,
+    Mists = 4,
 }
 
 local isSoD = C_Seasons and (C_Seasons.GetActiveSeason() == Enum.SeasonID.SeasonOfDiscovery)
