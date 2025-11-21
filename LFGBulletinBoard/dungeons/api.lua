@@ -20,6 +20,11 @@ local ExpansionByProjectID = {
 }
 Expansion.Current = ExpansionByProjectID[WOW_PROJECT_ID]
 
+--hack: in tbc ptr, the WOW_PROJECT_ID has not been updated yet
+if select(4, GetBuildInfo()) == 20505 then
+	Expansion.Current = Expansion.BurningCrusade
+end
+
 -- These enums are somewhat inline with the TypeID column of https://wago.tools/db2/LFGDungeons
 -- todo: unify at some point. This was more important when i was using GetLFGDungeonInfo API.
 ---@enum DungeonTypeID
